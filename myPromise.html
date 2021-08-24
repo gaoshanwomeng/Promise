@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>myPromise</title>
+</head>
+
+<body>
+    <script>
+class myPromise {
+    constructor(executor) {
+        executor(this._resolve, this._reject);
+    }
+
+    status = 'pending'
+    value = undefined
+    reason = undefined
+    resolveCallback = null
+    rejectCallback = null
+    param = undefined
+
+    _resolve = value => {
+        this.status = 'fulfilled';
+        this.value = value;
+        !!this.resolveCallback && this.resolveCallback(this.value);
+    }
+
+    _reject = reason => {
+        this.status = 'rejected';
+        this.reason = reason;
+        let r = this.reason;
+        !!this.rejectCallback && this.rejectCallback(this.reason);
+    }
+
+    then = (handleResolve, handleReject) => {
+        // 如果传进来的不是函数，则穿透
+        if(typeof handleResolve != 'function') {
+            handleResolve = value => value;
+        }
+        if(typeof handleReject != 'function') {
+            handleReject = error => error;
+        }
+
+        return new myPromise((nextResolve, nextReject) => {
+            const resolveFn = value => {
+                try {
+                    let r = handleResolve(value);
+                    r instanceof myPromise ? r.then(nextResolve, nextReject) : nextResolve(r);
+                }
+                catch (err) {
+                    nextReject(err);
+                }
+            }
+            const rejectFn = reason => {
+                try {
+                    let r = handleReject(reason);
+                    r instanceof myPromise ? r.then(nextResolve, nextReject) : nextResolve(r);
+                }
+                catch (err) {
+                    nextReject(err);
+                }
+            }
+            if (this.status == 'fulfilled') {
+                resolveFn(this.value);
+            }
+
+            if (this.status == 'rejected') {
+                rejectFn(this.reason);
+            }
+
+            if (this.status == 'pending') {
+                this.resolveCallback = resolveFn;
+                this.rejectCallback = rejectFn;
+            }
+        })
+    }
+
+    catch = handleReject => {
+        return this.then(null, handleReject);
+    }
+
+    finally = handleFinally => {
+        return this.then(handleFinally, handleFinally);
+    }
+
+    static resolve = value => {
+        if( value instanceof myPromise ){
+            return value;
+        }
+        else {
+            return new myPromise((resolve, reject)=>{
+                resolve(value);
+            })
+        }
+    }
+
+    static reject = reason => {
+        if( reason instanceof myPromise ){
+            return reason;
+        }
+        else {
+            return new myPromise((resolve, reject)=>{
+                reject(reason);
+            })
+        }
+    }
+
+    static all = promises => {
+        return new myPromise((resolve,reject) => {
+            let result = [];
+            if(!(promises instanceof Array)){
+                reject(new Error('params is not array'));
+            }
+            promises.forEach(promise => {
+                if(promise instanceof myPromise){
+                    promise.then(value => {
+                        result.push(value);
+                    }, reason => {
+                        reject(reason);
+                    })
+                } else {
+                    result.push(promise);
+                }
+                if(result.length == promises.length){
+                    resolve(result);
+                }  
+            })
+        })
+    }
+
+    static race = promises => {
+        return new myPromise((resolve,reject) => {
+            let result = [];
+            if(!(promises instanceof Array)){
+                reject(new Error('params is not array'));
+            }
+            promises.forEach(promise => {
+                if(promise instanceof myPromise){
+                    promise.then(value => {
+                        resolve(value);
+                    }, reason => {
+                        reject(reason);
+                    })
+                } else {
+                    resolve(promise);
+                } 
+            })
+        })
+    }
+
+}
+
+
+        let p1 = new myPromise((resolve, reject) => {
+            setTimeout(() => {
+                resolve(12345);
+            }, 2000)
+        })
+
+        console.log(p1);
+
+        p1.then(value => {
+            console.log(value);
+            return new myPromise((resolve, reject) => {
+                setTimeout(() => {
+                    resolve('then 12345');
+                }, 5000)
+            })
+        }).then(value => {
+            console.log(value);
+            throw new Error('then then reject 12345')
+        }).catch(reason => {
+            console.log(reason);
+        })
+    </script>
+</body>
+
+</html>
